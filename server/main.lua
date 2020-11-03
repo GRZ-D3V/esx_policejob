@@ -2,6 +2,21 @@ ESX = nil
 
 TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
 
+RegisterServerEvent('callserver')
+AddEventHandler('callserver', function(coords, raison)
+    local _source = source
+    local _raison = raison
+    local xPlayer = ESX.GetPlayerFromId(_source)
+    local xPlayers = ESX.GetPlayers()
+
+    for i = 1, #xPlayers, 1 do
+        local thePlayer = ESX.GetPlayerFromId(xPlayers[i])
+        if thePlayer.job.name == 'police' then
+            TriggerClientEvent('callblip:setBlip', xPlayers[i], coords, _raison)
+        end
+    end
+end)
+
 if Config.EnableESXService then
 	if Config.MaxInService ~= -1 then
 		TriggerEvent('esx_service:activateService', 'police', Config.MaxInService)
@@ -118,7 +133,7 @@ AddEventHandler('esx_policejob:getStockItem', function(itemName, count)
 			if xPlayer.canCarryItem(itemName, count) then
 				inventory.removeItem(itemName, count)
 				xPlayer.addInventoryItem(itemName, count)
-				xPlayer.showNotification(_U('have_withdrawn', count, inventoryItem.label))
+				xPlayer.showNotification(_U('have_withdrawn', count, inventoryItem.name))
 			else
 				xPlayer.showNotification(_U('quantity_invalid'))
 			end
@@ -140,7 +155,7 @@ AddEventHandler('esx_policejob:putStockItems', function(itemName, count)
 		if sourceItem.count >= count and count > 0 then
 			xPlayer.removeInventoryItem(itemName, count)
 			inventory.addItem(itemName, count)
-			xPlayer.showNotification(_U('have_deposited', count, inventoryItem.label))
+			xPlayer.showNotification(_U('have_deposited', count, inventoryItem.name))
 		else
 			xPlayer.showNotification(_U('quantity_invalid'))
 		end
