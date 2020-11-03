@@ -2,8 +2,8 @@ local CurrentActionData, handcuffTimer, dragStatus, blipsCops, currentTask = {},
 local HasAlreadyEnteredMarker, isDead, isHandcuffed, hasAlreadyJoined, playerInService = false, false, false, false, false
 local LastStation, LastPart, LastPartNum, LastEntity, CurrentAction, CurrentActionMsg
 dragStatus.isDragged, isInShopMenu = false, false
+local blips = {}
 ESX = nil
-
 Citizen.CreateThread(function()
 	while ESX == nil do
 		TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
@@ -253,6 +253,7 @@ function OpenPoliceActionsMenu()
 		title    = 'Police',
 		align    = 'top-left',
 		elements = {
+			{label = 'Reinforcement request', value = 'call'},
 			{label = _U('citizen_interaction'), value = 'citizen_interaction'},
 			{label = _U('vehicle_interaction'), value = 'vehicle_interaction'},
 			{label = _U('object_spawner'), value = 'object_spawner'}
@@ -384,6 +385,43 @@ function OpenPoliceActionsMenu()
 			end, function(data2, menu2)
 				menu2.close()
 			end)
+
+			-- Demande renfort
+		elseif data.current.value == 'call' then
+            local elements  = {}
+            local playerPed = PlayerPedId()
+
+            table.insert(elements, {label = ('Small request'), value = 'small_request'})
+            table.insert(elements, {label = ('Important request'), value = 'important_request'})
+      		table.insert(elements, {label = ('Urgent request !'), value = 'omgad'})
+
+            ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'call', {
+                css      = 'police',
+                title    = (''),
+                align    = 'top-left',
+                elements = elements
+            }, function(data2, menu2)
+                local coords  = GetEntityCoords(playerPed)
+                vehicle = ESX.Game.GetVehicleInDirection()
+                action  = data2.current.value
+                local name = GetPlayerName(PlayerId())
+
+                if action == 'small_request' then
+                    local raison = 'small'
+                    TriggerServerEvent('callserver', coords, raison)
+                elseif action == 'important_requeste' then
+                    local raison = 'important'
+                    TriggerServerEvent('callserver', coords, raison)
+                elseif action == 'omgad' then
+                    local raison = 'omgad'
+                    TriggerServerEvent('callserver', coords, raison)
+                end
+
+            end, function(data2, menu2)
+                menu2.close()
+            end)
+
+
 		elseif data.current.value == 'object_spawner' then
 			ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'citizen_interaction', {
 				title    = _U('traffic_interaction'),
@@ -411,6 +449,48 @@ function OpenPoliceActionsMenu()
 		menu.close()
 	end)
 end
+
+RegisterNetEvent('callblip:setBlip')
+AddEventHandler('callblip:setBlip', function(coords, raison)
+    if raison == 'small' then
+        PlaySoundFrontend(-1, "Start_Squelch", "CB_RADIO_SFX", 1)
+        PlaySoundFrontend(-1, "OOB_Start", "GTAO_FM_Events_Soundset", 1)
+        ESX.ShowAdvancedNotification('LSPD INFORMATIONS', '~b~Reinforcement request', 'Reinforcement request.\nReply: ~g~CODE-2\n~w~Importance: ~g~Light.', 'CHAR_CALL911', 8)
+        Wait(1000)
+        PlaySoundFrontend(-1, "End_Squelch", "CB_RADIO_SFX", 1)
+        color = 2
+    elseif raison == 'important' then
+        PlaySoundFrontend(-1, "Start_Squelch", "CB_RADIO_SFX", 1)
+        PlaySoundFrontend(-1, "OOB_Start", "GTAO_FM_Events_Soundset", 1)
+        ESX.ShowAdvancedNotification('LSPD INFORMATIONS', '~b~Reinforcement request', 'Reinforcement request.\nReply: ~g~CODE-3\n~w~Importance: ~o~important.', 'CHAR_CALL911', 8)
+        Wait(1000)
+        PlaySoundFrontend(-1, "End_Squelch", "CB_RADIO_SFX", 1)
+        color = 47
+	elseif raison == 'omgad' then
+        PlaySoundFrontend(-1, "Start_Squelch", "CB_RADIO_SFX", 1)
+        PlaySoundFrontend(-1, "OOB_Start", "GTAO_FM_Events_Soundset", 1)
+        PlaySoundFrontend(-1, "FocusIn", "HintCamSounds", 1)
+        ESX.ShowAdvancedNotification('LSPD INFORMATIONS', '~b~Reinforcement request', 'Reinforcement request.\nReply: ~g~CODE-99\n~w~Importance: ~r~URGENT !\nIMPORTANT DANGER', 'CHAR_CALL911', 8)
+        Wait(1000)
+        PlaySoundFrontend(-1, "End_Squelch", "CB_RADIO_SFX", 1)
+        PlaySoundFrontend(-1, "FocusOut", "HintCamSounds", 1)
+        color = 1
+    end
+		blipId = AddBlipForCoord(coords)
+		SetBlipSprite(blipId, 161)
+		SetBlipScale(blipId, 0.99)
+		SetBlipColour(blipId, color)
+		BeginTextCommandSetBlipName("STRING")
+		AddTextComponentString('Reinforcement request')
+		EndTextCommandSetBlipName(blipId)
+		table.insert(blips, blipId)
+		Wait(12000)
+		for i, blipId in pairs(blips) do 
+			RemoveBlip(blipId)
+		end
+	end)
+
+
 
 function OpenIdentityCardMenu(player)
 	ESX.TriggerServerCallback('esx_policejob:getOtherPlayerData', function(data)
@@ -1120,30 +1200,36 @@ end)
 
 RegisterNetEvent('esx_policejob:putInVehicle')
 AddEventHandler('esx_policejob:putInVehicle', function()
-	if isHandcuffed then
-		local playerPed = PlayerPedId()
-		local coords = GetEntityCoords(playerPed)
+    local playerPed = PlayerPedId()
+    local coords    = GetEntityCoords(playerPed)
 
-		if IsAnyVehicleNearPoint(coords, 5.0) then
-			local vehicle = GetClosestVehicle(coords, 5.0, 0, 71)
+    if not IsHandcuffed then
+        return
+    end
 
-			if DoesEntityExist(vehicle) then
-				local maxSeats, freeSeat = GetVehicleMaxNumberOfPassengers(vehicle)
+    if IsAnyVehicleNearPoint(coords.x, coords.y, coords.z, 5.0) then
+        local vehicle = GetClosestVehicle(coords.x, coords.y, coords.z, 5.0, 0, 71)
 
-				for i=maxSeats - 1, 0, -1 do
-					if IsVehicleSeatFree(vehicle, i) then
-						freeSeat = i
-						break
-					end
-				end
+        if DoesEntityExist(vehicle) then
+            local maxSeats = GetVehicleMaxNumberOfPassengers(vehicle)
+            
 
-				if freeSeat then
-					TaskWarpPedIntoVehicle(playerPed, vehicle, freeSeat)
-					dragStatus.isDragged = false
-				end
-			end
-		end
-	end
+            for i=maxSeats - 1, 0, -1 do
+            ESX.ShowNotification(i)
+                
+                if IsVehicleSeatFree(vehicle, i) then
+                    freeSeat = i
+                    --ESX.ShowNotification(freeSeat)
+                    break
+                end
+            end
+                
+            if freeSeat then
+                TaskWarpPedIntoVehicle(playerPed, vehicle, freeSeat)
+                DragStatus.IsDragged = false
+            end
+        end
+    end
 end)
 
 RegisterNetEvent('esx_policejob:OutVehicle')
